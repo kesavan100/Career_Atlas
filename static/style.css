@@ -1,0 +1,67 @@
+/* Custom styling for the markdown output in the chat bubbles */
+.markdown-content h1, 
+.markdown-content h2, 
+.markdown-content h3 {
+    font-weight: bold;
+    margin-top: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.markdown-content h3 {
+    font-size: 1.1em;
+}
+
+.markdown-content p {
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content ul {
+    list-style-type: disc;
+    margin-left: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content ol {
+    list-style-type: decimal;
+    margin-left: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content code {
+    background-color: #f1f5f9;
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.25rem;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.markdown-content pre code {
+    display: block;
+    padding: 1rem;
+    overflow-x: auto;
+    background-color: #1e293b;
+    color: #f8fafc;
+}
+
+.markdown-content a {
+    color: #fb00ee27;
+    text-decoration: underline;
+}
+
+/* Custom Scrollbar for chat history */
+#chat-history::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chat-history::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#chat-history::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+#chat-history::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}

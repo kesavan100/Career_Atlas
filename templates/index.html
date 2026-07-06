@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CareerAtlas</title>
+    <!-- Prevent favicon 404 errors -->
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Marked.js for parsing markdown from Gemini -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-900 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- Header (Simple & Classic) -->
+    <header class="bg-violet-100 text-violet-700 p-3 border-b border-violet-200 flex justify-between items-center shrink-0">
+        <div>
+            <h1 class="text-xl font-bold">CareerAtlas</h1>
+            <p class="text-sm">Navigate Your Career with AI</p>
+        </div>
+        <div class="flex gap-2">
+            <button id="interview-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm hidden">
+                Generate Interview Qs
+            </button>
+            <button id="clear-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded text-sm border border-gray-400">
+                Clear History
+            </button>
+        </div>
+    </header>
+    
+    <!-- Main Layout -->
+    <main class="flex-grow flex flex-col md:flex-row overflow-hidden">
+        
+        <!-- LEFT SIDEBAR (30%) -->
+        <aside class="w-full md:w-[30%] bg-white border-r border-gray-300 flex flex-col overflow-y-auto shrink-0 p-4 gap-4">
+            
+            <!-- Upload Section -->
+            <div class="border border-gray-300 p-3 bg-gray-50 rounded">
+                <h2 class="font-bold text-gray-700 mb-2">1. Upload Resume</h2>
+                <form id="upload-form" class="flex flex-col gap-2">
+                    <input type="file" id="resume-file" accept=".pdf" class="border border-gray-400 p-1 bg-white text-sm" required>
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-2 rounded text-sm">
+                        Upload & Process
+                    </button>
+                </form>
+                <div id="upload-status" class="mt-2 text-sm hidden p-2 border text-center"></div>
+                <p class="text-xs text-gray-500 mt-2 text-center">Extracts text &rarr; Chunks &rarr; ChromaDB</p>
+            </div>
+
+            <!-- AI Memory Profile Section (Simple) -->
+            <div id="dashboard" class="border border-gray-300 p-3 bg-gray-50 rounded hidden flex-col gap-3">
+                <h2 class="font-bold text-gray-700 mb-1">2. AI Memory Profile</h2>
+                
+                <div>
+                    <p class="text-xs font-bold text-gray-600">Suggested Path:</p>
+                    <p id="dash-path" class="text-sm text-blue-700 font-bold">-</p>
+                </div>
+                
+                <div>
+                    <p class="text-xs font-bold text-gray-600 mb-1">Top Skills:</p>
+                    <div id="dash-skills" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto"></div>
+                </div>
+                
+                <div>
+                    <p class="text-xs font-bold text-gray-600 mb-1">Technologies:</p>
+                    <div id="dash-tech" class="flex flex-wrap gap-1 max-h-20 overflow-y-auto"></div>
+                </div>
+                
+                <div>
+                    <p class="text-xs font-bold text-gray-600 mb-1">Domains:</p>
+                    <div id="dash-domains" class="flex flex-wrap gap-1 max-h-20 overflow-y-auto"></div>
+                </div>
+            </div>
+            
+        </aside>
+
+        <!-- RIGHT MAIN CHAT AREA (70%) -->
+        <section class="w-full md:w-[70%] bg-white flex flex-col relative overflow-hidden">
+            
+            <!-- Chat History -->
+            <div id="chat-history" class="flex-grow p-4 overflow-y-auto flex flex-col gap-4">
+                {% if messages|length == 0 %}
+                    <div class="text-center text-gray-500 mt-10">
+                        <p>No messages yet.</p>
+                        <p class="text-sm mt-1">Upload a resume and ask a question.</p>
+                    </div>
+                {% endif %}
+                
+                {% for msg in messages %}
+                    {% if msg.role == 'user' %}
+                        <div class="self-end bg-blue-100 border border-blue-200 text-gray-900 p-3 rounded max-w-[80%] text-sm">
+                            {{ msg.content }}
+                        </div>
+                    {% elif msg.role == 'system' %}
+                        <div class="self-center bg-gray-200 text-gray-700 text-xs p-1.5 px-3 rounded border border-gray-300 font-mono">
+                            {{ msg.content }}
+                        </div>
+                    {% else %}
+                        <div class="self-start bg-gray-50 text-gray-900 p-3 rounded max-w-[85%] border border-gray-300 markdown-content text-sm">
+                            {{ msg.content }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- Chat Input Form -->
+            <div class="p-3 bg-gray-100 border-t border-gray-300 shrink-0">
+                <form id="chat-form" class="flex gap-2 max-w-4xl mx-auto">
+                    <input type="text" id="question" name="question" placeholder="Ask a question..." class="flex-grow border border-gray-400 p-2 rounded bg-white text-sm" required>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded text-sm" id="send-btn">
+                        Send
+                    </button>
+                </form>
+            </div>
+        </section>
+        
+    </main>
+
+    <script>
+        // Parse markdown on initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            const markdownElements = document.querySelectorAll('.markdown-content');
+            markdownElements.forEach(el => {
+                el.innerHTML = marked.parse(el.textContent);
+            });
+            scrollToBottom();
+            fetchProfile();
+        });
+
+        const chatHistory = document.getElementById('chat-history');
+        
+        async function fetchProfile() {
+            try {
+                const res = await fetch('/api/profile');
+                const data = await res.json();
+                if (data && data.skills) {
+                    document.getElementById('dashboard').classList.remove('hidden');
+                    document.getElementById('dashboard').classList.add('flex');
+                    document.getElementById('interview-btn').classList.remove('hidden');
+                    
+                    document.getElementById('dash-path').textContent = data.suggested_path || '-';
+                    
+                    const renderTags = (arr, elId) => {
+                        const el = document.getElementById(elId);
+                        el.innerHTML = '';
+                        (arr || []).forEach(item => {
+                            el.innerHTML += `<span class="bg-white border border-gray-300 text-gray-700 text-[11px] px-1.5 py-0.5 rounded">${item}</span>`;
+                        });
+                    };
+                    
+                    renderTags(data.skills, 'dash-skills');
+                    renderTags(data.technologies, 'dash-tech');
+                    renderTags(data.domains, 'dash-domains');
+                }
+            } catch (e) {
+                console.error("No profile yet.");
+            }
+        }
+        
+        function scrollToBottom() {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        // Upload Form Handler
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('resume-file');
+            const statusDiv = document.getElementById('upload-status');
+            const submitBtn = e.target.querySelector('button');
+            
+            if (!fileInput.files.length) return;
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            
+            statusDiv.className = 'mt-2 text-sm p-2 rounded bg-yellow-100 text-yellow-800 block text-center border border-yellow-300';
+            statusDiv.textContent = 'Generating vector embeddings...';
+            
+            try {
+                const response = await fetch('/upload_resume', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    statusDiv.className = 'mt-2 text-sm p-2 rounded bg-red-100 text-red-800 block border border-red-300 text-center';
+                    statusDiv.textContent = 'Error: ' + result.error;
+                } else {
+                    statusDiv.className = 'mt-2 text-sm p-2 rounded bg-green-100 text-green-800 block border border-green-300 text-center';
+                    statusDiv.textContent = 'Success! Reloading...';
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            } catch (error) {
+                statusDiv.className = 'mt-2 text-sm p-2 rounded bg-red-100 text-red-800 block border border-red-300 text-center';
+                statusDiv.textContent = 'Network error occurred.';
+            } finally {
+                if(!statusDiv.textContent.includes('Success')) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Upload & Process';
+                }
+            }
+        });
+
+        // Chat Form Handler
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const questionInput = document.getElementById('question');
+            const question = questionInput.value.trim();
+            const sendBtn = document.getElementById('send-btn');
+            
+            if (!question) return;
+            
+            appendMessage('user', question);
+            questionInput.value = '';
+            
+            const typingId = appendTypingIndicator();
+            sendBtn.disabled = true;
+            
+            try {
+                const formData = new FormData();
+                formData.append('question', question);
+                
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                document.getElementById(typingId).remove();
+                
+                if (result.error) {
+                    appendMessage('system', 'Error: ' + result.error);
+                } else {
+                    appendMessage('assistant', result.ai_response, result.context);
+                }
+            } catch (error) {
+                document.getElementById(typingId).remove();
+                appendMessage('system', 'Error connecting to the server.');
+            } finally {
+                sendBtn.disabled = false;
+                questionInput.focus();
+            }
+        });
+
+        // Interview Button Handler
+        document.getElementById('interview-btn').addEventListener('click', async () => {
+            appendMessage('user', 'Generate Interview Questions');
+            const typingId = appendTypingIndicator();
+            
+            try {
+                const response = await fetch('/api/generate_interview', { method: 'POST' });
+                const result = await response.json();
+                
+                document.getElementById(typingId).remove();
+                
+                if (result.error) {
+                    appendMessage('system', 'Error: ' + result.error);
+                } else {
+                    appendMessage('assistant', result.ai_response);
+                }
+            } catch (error) {
+                document.getElementById(typingId).remove();
+                appendMessage('system', 'Error connecting to the server.');
+            }
+        });
+
+        // Clear History
+        document.getElementById('clear-btn').addEventListener('click', async () => {
+            if(confirm('Are you sure you want to clear the chat history?')) {
+                await fetch('/clear_history', { method: 'POST' });
+                window.location.reload();
+            }
+        });
+
+        // Helper to add messages to UI dynamically
+        function appendMessage(role, content, context = null) {
+            const emptyState = chatHistory.querySelector('.text-center.text-gray-500');
+            if (emptyState) emptyState.remove();
+
+            const div = document.createElement('div');
+            
+            if (role === 'user') {
+                div.className = 'self-end bg-blue-100 border border-blue-200 text-gray-900 p-3 rounded max-w-[80%] text-sm';
+                div.textContent = content;
+            } else if (role === 'system') {
+                div.className = 'self-center bg-gray-200 text-gray-700 text-xs p-1.5 px-3 rounded border border-gray-300 font-mono';
+                div.textContent = content;
+            } else {
+                div.className = 'self-start bg-gray-50 text-gray-900 p-3 rounded max-w-[85%] border border-gray-300 text-sm';
+                
+                const markdownDiv = document.createElement('div');
+                markdownDiv.className = 'markdown-content';
+                markdownDiv.innerHTML = marked.parse(content);
+                div.appendChild(markdownDiv);
+                
+                // Collapsible Retrieved Context UI (Simple format)
+                if (context && context.length > 0) {
+                    const details = document.createElement('details');
+                    details.className = 'mt-3 pt-2 border-t border-gray-300';
+                    
+                    const summary = document.createElement('summary');
+                    summary.className = 'text-xs font-bold text-gray-600 cursor-pointer list-inside select-none';
+                    summary.textContent = `Retrieved ${context.length} relevant chunks`;
+                    details.appendChild(summary);
+                    
+                    const ctxContainer = document.createElement('div');
+                    ctxContainer.className = 'mt-2 flex flex-col gap-2';
+                    
+                    context.forEach(c => {
+                        const dist = c.distance !== null ? c.distance.toFixed(3) : 'N/A';
+                        ctxContainer.innerHTML += `
+                            <div class="bg-white p-2 border border-gray-300 rounded text-xs font-mono">
+                                <div class="text-gray-500 mb-1 border-b pb-1">
+                                    Chunk ID: ${c.id} | Distance: ${dist}
+                                </div>
+                                <div class="text-gray-800 whitespace-pre-wrap">${c.text}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    details.appendChild(ctxContainer);
+                    div.appendChild(details);
+                }
+            }
+            
+            chatHistory.appendChild(div);
+            scrollToBottom();
+        }
+        
+        function appendTypingIndicator() {
+            const id = 'typing-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'self-start bg-gray-50 text-gray-600 p-3 rounded border border-gray-300 text-sm italic';
+            div.textContent = 'Generating response...';
+            chatHistory.appendChild(div);
+            scrollToBottom();
+            return id;
+        }
+    </script>
+</body>
+</html>
